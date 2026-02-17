@@ -1,0 +1,5 @@
+{
+  "name": "Comparador de Presupuestos",
+  "description": "Una aplicación avanzada para la gestión, comparación y exportación de presupuestos y partidas de obra, con integración de IA para el matching de datos.",
+  "requestFramePermissions": []
+}
