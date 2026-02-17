@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './utils/supabase';
+import { supabase } from './supabase/supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
