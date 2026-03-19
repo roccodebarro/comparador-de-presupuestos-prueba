@@ -48,6 +48,9 @@ const ComparisonRow = React.memo(({
 
       {/* Columna Izquierda: Descripción Cliente */}
       <div className="col-span-7 pr-4">
+        {item.clienteCodigo && (
+          <span className="block text-[10px] font-black text-slate-400 mb-1 uppercase tracking-wider">{item.clienteCodigo}</span>
+        )}
         <h4 className="text-[14px] font-bold text-slate-900 dark:text-white leading-relaxed mb-2">{item.clientePartida}</h4>
         <div className="flex items-center gap-2">
           <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${item.estado === 'COINCIDENTE' ? 'bg-green-100 text-green-700' :
@@ -69,6 +72,19 @@ const ComparisonRow = React.memo(({
       {/* Columna Derecha: Tarjeta de Vinculación + Precios */}
       <div className="col-span-5 flex justify-end">
         <div className="w-full max-w-[480px] bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 p-4 rounded-2xl shadow-sm relative group/card">
+
+          {/* Información del Cliente (Importado) */}
+          {item.clientePrecio !== undefined && (
+            <div className="flex items-center justify-between mb-2 px-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter border-b border-slate-200/50 pb-2">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">description</span> BC3 Original:
+              </span>
+              <span>
+                {item.clientePrecio.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €/ud →
+                <span className="text-slate-500 ml-1">Total: {(item.cantidad * item.clientePrecio).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+              </span>
+            </div>
+          )}
 
           {/* Header de la Card: Inputs de Cantidad y Precio */}
           <div className="flex items-center justify-between mb-3 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
@@ -188,8 +204,13 @@ const DetailedComparison: React.FC = () => {
   // 🛠️ Función Helper para normalizar items y evitar errores de cálculo
   const normalizeItem = useCallback((it: any) => {
     if (!it) return null;
-    // El precio de la base de datos va directamente a Venta
-    const venta = it.precioVenta ?? it.miPartida?.precioUnitario ?? 0;
+
+    // Prioridad de precio de venta:
+    // 1. Ya editado por usuario (it.precioVenta)
+    // 2. Partida vinculada (it.miPartida.precioUnitario)
+    // 3. Precio base original del BC3 (it.clientePrecio)
+    const venta = it.precioVenta ?? (it.miPartida?.precioUnitario ?? it.clientePrecio ?? 0);
+
     const baseCost = it.precioCoste ?? 0;
     const percentage = it.porcentaje ?? 0;
 
@@ -233,7 +254,7 @@ const DetailedComparison: React.FC = () => {
   const [renderError, setRenderError] = useState<string | null>(null);
   const [visibleItemsCount, setVisibleItemsCount] = useState(50);
   const [comparisonId, setComparisonId] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY_ID));
-  const [history, setHistory] = useState<ComparisonItem[][]>([]);
+
   const [isAutoValidating, setIsAutoValidating] = useState(false);
   const [itemsToAutoValidate, setItemsToAutoValidate] = useState<string[]>([]);
 
@@ -303,36 +324,55 @@ const DetailedComparison: React.FC = () => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // 🏗️ 1. Cargar Base de Datos Maestra (Siempre necesaria para el modal)
-        let allPartidas = dbCache.get();
-        if (!allPartidas) {
-          allPartidas = [];
-          let hasMore = true;
-          let page = 0;
-          const pageSize = 1000;
-          while (hasMore) {
-            const { data, error } = await supabase
-              .from('partidas')
-              .select('id, codigo, descripcion, categoria, precio_unitario, unidad')
-              .range(page * pageSize, (page + 1) * pageSize - 1);
-            if (error) throw error;
-            if (data && data.length > 0) {
-              allPartidas = [...allPartidas, ...data];
-              page++;
-              if (data.length < pageSize) hasMore = false;
-            } else {
-              hasMore = false;
-            }
+        // 🏗️ 1. Cargar Base de Datos Maestra
+        // Siempre recargamos frescos para tener precios actualizados (Punto 3)
+        let allPartidas: any[] = [];
+        let hasMore = true;
+        let page = 0;
+        const pageSize = 2000; // Páginas más grandes = menos llamadas a BD
+
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('partidas')
+            .select('id, codigo, descripcion, categoria, precio_unitario, unidad')
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allPartidas = [...allPartidas, ...data];
+            page++;
+            if (data.length < pageSize) hasMore = false;
+          } else {
+            hasMore = false;
           }
-          const normalized = allPartidas.map((p: any) => ({
-            ...p,
-            precioUnitario: Number(p.precio_unitario) || 0,
-            searchContent: simplifyText(`${p.codigo} ${p.descripcion}`)
-          }));
-          dbCache.set(normalized);
-          allPartidas = normalized;
         }
-        setDbPartidas(allPartidas as any[]);
+
+        const normalized = allPartidas.map((p: any) => ({
+          ...p,
+          precioUnitario: Number(p.precio_unitario) || 0,
+          searchContent: simplifyText(`${p.codigo} ${p.descripcion} ${p.categoria || ''}`)
+        }));
+        dbCache.set(normalized);
+        allPartidas = normalized;
+        setDbPartidas(allPartidas);
+
+        // Punto 3: Si hay items en localStorage con partidas vinculadas,
+        // refrescar sus precios con los datos recién cargados de la BD
+        setItems(prev => {
+          if (prev.length === 0) return prev;
+          const partidaMap = new Map(allPartidas.map((p: any) => [p.id, p]));
+          return prev.map(item => {
+            if (!item.miPartida?.id) return item;
+            const fresca = partidaMap.get(item.miPartida.id) as any;
+            if (!fresca) return item;
+            return {
+              ...item,
+              miPartida: fresca,
+              precioVenta: item.precioVenta === item.miPartida.precioUnitario
+                ? fresca.precioUnitario  // Solo actualizar si el usuario no lo cambió manualmente
+                : item.precioVenta
+            };
+          });
+        });
 
         // 🏗️ 2. Determinar qué items mostrar para comparar
 
@@ -358,7 +398,7 @@ const DetailedComparison: React.FC = () => {
 
         // Caso C: Nueva importación (Necesita análisis)
         const [w, s] = await Promise.all([getWordWeights(), getSynonyms()]);
-        const itemsToProcess = location.state.items as { descripcion: string; cantidad: number }[];
+        const itemsToProcess = location.state.items as { descripcion: string; cantidad: number; codigo?: string }[];
         const raw = itemsToProcess.filter(item => {
           const desc = String(item.descripcion || '').toLowerCase();
           return !desc.startsWith('total') && !desc.includes('subtotal') && desc.trim() !== '';
@@ -405,8 +445,14 @@ const DetailedComparison: React.FC = () => {
 
   // Total Venta Real = Suma de [ (Coste*(1+%)) + Venta ] * Cantidad * (1 + %global)
   const gp = parseFloat(globalPercentage) || 0;
+  // 💰 Cálculos de totales
+  const totalCliente = useMemo(() => {
+    return items.reduce((s, i) => s + ((i.cantidad || 0) * (i.clientePrecio || 0)), 0);
+  }, [items]);
+
   const totalCalculado = useMemo(() => {
     return items.reduce((s, i) => {
+      if (i.estado === 'SIN COINCIDENCIA') return s;
       const puBase = (i.precioVenta || 0) + (i.precioCoste || 0) * (1 + ((i.porcentaje || 0) / 100));
       const puFinal = Number((puBase * (1 + (gp / 100))).toFixed(2));
       const lineTotal = Number((i.cantidad * puFinal).toFixed(2));
@@ -416,6 +462,7 @@ const DetailedComparison: React.FC = () => {
 
   // Coste Total Real = Suma de (Coste Base * Cantidad) + Venta (que es el base de BD)
   const totalCoste = useMemo(() => items.reduce((s, i) => {
+    if (i.estado === 'SIN COINCIDENCIA') return s;
     return s + ((i.precioCoste || 0) * i.cantidad) + ((i.precioVenta || 0) * i.cantidad);
   }, 0), [items]);
 
@@ -427,7 +474,13 @@ const DetailedComparison: React.FC = () => {
   };
 
   const handleConfirm = useCallback((id: string) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, estado: 'COINCIDENTE', confianza: 100 } : i));
+    setItems(prev => {
+      const item = prev.find(i => i.id === id);
+      if (item?.miPartida) {
+        recordConfirmation(item.clientePartida, item.miPartida.descripcion, item.miPartida.id);
+      }
+      return prev.map(i => i.id === id ? { ...i, estado: 'COINCIDENTE', confianza: 100 } : i);
+    });
   }, []);
 
   const openLinkingModal = useCallback((id: string) => {
@@ -452,16 +505,21 @@ const DetailedComparison: React.FC = () => {
   }, []);
 
   const selectPartida = (p: Partida) => {
-    setHistory(prev => [items, ...prev].slice(0, 5));
-    setItems(prev => prev.map(i => i.id === activeItemId ? {
-      ...i,
-      estado: 'COINCIDENTE',
-      miPartida: p,
-      confianza: 100,
-      precioCoste: 0,
-      precioVenta: p.precioUnitario, // El precio maestro va a Venta
-      porcentaje: 0
-    } : i));
+    setItems(prev => {
+      const item = prev.find(i => i.id === activeItemId);
+      if (item) {
+        recordConfirmation(item.clientePartida, p.descripcion, p.id);
+      }
+      return prev.map(i => i.id === activeItemId ? {
+        ...i,
+        estado: 'COINCIDENTE',
+        miPartida: p,
+        confianza: 100,
+        precioCoste: 0,
+        precioVenta: p.precioUnitario,
+        porcentaje: 0
+      } : i);
+    });
     setIsLinkingModalOpen(false);
   };
 
@@ -473,7 +531,7 @@ const DetailedComparison: React.FC = () => {
   };
 
   const confirmAutoValidate = () => {
-    setHistory(prev => [items, ...prev].slice(0, 5));
+
     setItems(prev => prev.map(i =>
       itemsToAutoValidate.includes(i.id)
         ? {
@@ -487,13 +545,7 @@ const DetailedComparison: React.FC = () => {
     setIsAutoValidating(false);
   };
 
-  const undoLastAction = () => {
-    if (history.length > 0) {
-      const last = history[0];
-      setItems(last);
-      setHistory(prev => prev.slice(1));
-    }
-  };
+
 
   const handleReset = () => {
     if (confirm('¿Reiniciar?')) {
@@ -505,8 +557,8 @@ const DetailedComparison: React.FC = () => {
 
   const filteredDB = useMemo(() => {
     const s = simplifyText(searchTerm);
-    if (!s) return dbPartidas.slice(0, 50); // Mostrar top 50 si no hay búsqueda
-    return dbPartidas.filter(p => (p as any).searchContent?.includes(s)).slice(0, 50); // Limitar resultados para estabilidad
+    if (!s) return dbPartidas.slice(0, 100);
+    return dbPartidas.filter(p => (p as any).searchContent?.includes(s)).slice(0, 100);
   }, [dbPartidas, searchTerm]);
 
   if (isLoading && items.length === 0) {
@@ -547,18 +599,7 @@ const DetailedComparison: React.FC = () => {
           <p className="text-slate-500 font-medium">Gestiona {items.length} partidas encontradas</p>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={undoLastAction}
-            disabled={history.length === 0}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-black transition-all border shadow-sm active:scale-95 uppercase tracking-widest ${history.length > 0
-              ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500 hover:text-white'
-              : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-              }`}
-            title="Deshacer última acción"
-          >
-            <span className="material-symbols-outlined text-lg">undo</span>
-            Deshacer
-          </button>
+
           <button
             onClick={handleAutoValidate}
             className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl text-sm font-black hover:bg-primary-dark transition-all shadow-md active:scale-95 uppercase tracking-widest"
@@ -632,6 +673,11 @@ const DetailedComparison: React.FC = () => {
                 />
                 <span className="text-xs font-bold absolute right-8 pointer-events-none text-white/50">%</span>
               </div>
+            </div>
+
+            <div>
+              <p className="text-[9px] font-black opacity-40 uppercase tracking-widest mb-1">Presupuesto Cliente</p>
+              <p className="text-sm sm:text-lg font-bold opacity-60 line-through decoration-white/20">{totalCliente.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
             </div>
 
             <div>

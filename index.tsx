@@ -3,8 +3,13 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+console.log('--- App Entry Point Reached ---');
+
 const rootElement = document.getElementById('root');
-if (!rootElement) throw new Error("Could not find root element");
+if (!rootElement) {
+  console.error("Critical: Could not find root element with id 'root'");
+  throw new Error("Could not find root element");
+}
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(

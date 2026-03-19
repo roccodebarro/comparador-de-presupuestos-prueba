@@ -2,6 +2,16 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 
+interface Comparison {
+  id: string;
+  file_name: string;
+  total_estimado: number;
+  partidas_totales: number;
+  partidas_vinculadas: number;
+  user_id: string;
+  created_at: string;
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [partidasCount, setPartidasCount] = React.useState<number | null>(null);
@@ -13,8 +23,8 @@ const Dashboard: React.FC = () => {
   const [recientes, setRecientes] = React.useState<any[]>([]);
   const [isLoadingRecientes, setIsLoadingRecientes] = React.useState(true);
   const [stats, setStats] = React.useState({
-    monthCount: 0,
-    monthTrend: 0,
+    yearCount: 0,
+    yearTrend: 0,
     totalVolume: 0
   });
 
@@ -71,47 +81,45 @@ const Dashboard: React.FC = () => {
           setLatestProjectName(latestProj.nombre);
         }
 
-        // Cargar comparaciones recientes
-        const { data: cDataRaw, error: cError } = await supabase
+        // Cargar comparaciones completas para estadísticas (sin límite de 5)
+        const { data: allCompsData, error: cError } = await supabase
           .from('comparaciones_recientes')
           .select('*')
-          .order('created_at', { ascending: false })
-          .limit(5);
+          .order('created_at', { ascending: false });
 
-        const cData = cDataRaw as any[];
+        const allComps = (allCompsData as any[]) as Comparison[];
 
-        if (!cError && cData) {
-          setRecientes(cData);
+        if (!cError && allComps) {
+          // Guardar solo las 5 últimas para la lista visual
+          setRecientes(allComps.slice(0, 5));
 
-          // Calcular estadísticas para TAREA 2.1
+          // Calcular estadísticas ANUALES
           const now = new Date();
-          const thisMonth = now.getMonth();
           const thisYear = now.getFullYear();
-          const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-          const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+          const lastYear = thisYear - 1;
 
-          const currentMonthComps = cData.filter(c => {
+          const currentYearComps = allComps.filter(c => {
             const d = new Date(c.created_at);
-            return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+            return d.getFullYear() === thisYear;
           });
 
-          const lastMonthComps = cData.filter(c => {
+          const lastYearComps = allComps.filter(c => {
             const d = new Date(c.created_at);
-            return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+            return d.getFullYear() === lastYear;
           });
 
-          const totalVol = cData.reduce((sum, c) => sum + (Number(c.total_estimado) || 0), 0);
+          const totalVol = allComps.reduce((sum, c) => sum + (Number(c.total_estimado) || 0), 0);
 
           let trend = 0;
-          if (lastMonthComps.length > 0) {
-            trend = ((currentMonthComps.length - lastMonthComps.length) / lastMonthComps.length) * 100;
-          } else if (currentMonthComps.length > 0) {
-            trend = 100; // Incremento del 100% si no había nada el mes pasado
+          if (lastYearComps.length > 0) {
+            trend = ((currentYearComps.length - lastYearComps.length) / lastYearComps.length) * 100;
+          } else if (currentYearComps.length > 0) {
+            trend = 100;
           }
 
           setStats({
-            monthCount: currentMonthComps.length,
-            monthTrend: trend,
+            yearCount: currentYearComps.length,
+            yearTrend: trend,
             totalVolume: totalVol
           });
         }
@@ -154,18 +162,18 @@ const Dashboard: React.FC = () => {
             <div className="p-2.5 rounded-xl bg-primary/10">
               <span className="material-symbols-outlined text-primary">analytics</span>
             </div>
-            {stats.monthTrend !== 0 && (
-              <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${stats.monthTrend > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {stats.monthTrend > 0 ? '+' : ''}{stats.monthTrend.toFixed(1)}%
+            {stats.yearTrend !== 0 && (
+              <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${stats.yearTrend > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {stats.yearTrend > 0 ? '+' : ''}{stats.yearTrend.toFixed(1)}%
               </span>
             )}
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-1 uppercase tracking-wider">Comparativas este mes</p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs font-bold mb-1 uppercase tracking-wider">Comparativas este año</p>
           <h3 className="text-3xl font-black text-slate-900 dark:text-white">
-            {isLoadingRecientes ? '...' : stats.monthCount}
+            {isLoadingRecientes ? '...' : stats.yearCount}
           </h3>
           <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest">
-            {stats.monthTrend >= 0 ? 'Crecimiento mensual' : 'Descenso mensual'}
+            {stats.yearTrend >= 0 ? 'Crecimiento anual' : 'Descenso anual'}
           </p>
         </div>
 

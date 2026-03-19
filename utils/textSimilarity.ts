@@ -46,10 +46,22 @@ export function simplifyText(text: string): string {
  * Normaliza un texto para comparación (formato array de palabras)
  */
 export function normalizeText(text: string): string[] {
-    return simplifyText(text)
+    const simplified = simplifyText(text);
+
+    // Si parece un código (números con puntos o guiones, ej: 06.02.01)
+    // lo mantenemos casi intacto para matching exacto
+    if (/^[\d.-]+$/.test(simplified) && simplified.length >= 2) {
+        return [simplified];
+    }
+
+    return simplified
         .replace(/[^a-z0-9\s]/g, ' ')    // Solo alfanumérico
         .split(/\s+/)
-        .filter(word => word.length > 2 && !STOPWORDS.has(word));
+        .filter(word => {
+            // Permitimos palabras cortas si son números (posibles códigos)
+            if (/^\d+$/.test(word)) return word.length >= 1;
+            return word.length > 2 && !STOPWORDS.has(word);
+        });
 }
 
 /**
@@ -228,17 +240,18 @@ export function calculateSimilarity(
 
 /**
  * Clasifica el resultado de similitud
+ * NOTA: Los umbrales están centralizados en matchingConstants.ts
  */
 export function classifyMatch(score: number): 'COINCIDENTE' | 'SIMILAR' | 'SIN COINCIDENCIA' {
-    if (score >= 85) return 'COINCIDENTE';
-    if (score >= 60) return 'SIMILAR';
+    if (score >= 88) return 'COINCIDENTE';
+    if (score >= 62) return 'SIMILAR';
     return 'SIN COINCIDENCIA';
 }
 
 /**
  * Encuentra las mejores coincidencias para una descripción de cliente
  */
-export function findBestMatches<T extends { descripcion: string; normalized?: string[] }>(
+export function findBestMatches<T extends { descripcion: string; codigo?: string; normalized?: string[] }>(
     clienteDesc: string,
     partidas: T[],
     wordWeights: WordWeightMap = {},
@@ -265,6 +278,14 @@ export function findBestMatches<T extends { descripcion: string; normalized?: st
     }
 
     return results
-        .sort((a, b) => b.result.score - a.result.score)
+        .sort((a, b) => {
+            const scoreDiff = b.result.score - a.result.score;
+            if (scoreDiff !== 0) return scoreDiff;
+            // Estabilidad: si el score es igual, ordenar por código y luego por descripción
+            const codeA = a.partida.codigo || '';
+            const codeB = b.partida.codigo || '';
+            if (codeA !== codeB) return codeA.localeCompare(codeB);
+            return a.partida.descripcion.localeCompare(b.partida.descripcion);
+        })
         .slice(0, limit);
 }

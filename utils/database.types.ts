@@ -13,6 +13,7 @@ export interface Database {
                 Row: {
                     id: string
                     codigo: string
+                    resumen: string | null
                     descripcion: string
                     categoria: string | null
                     unidad: string | null
@@ -23,6 +24,7 @@ export interface Database {
                 Insert: {
                     id?: string
                     codigo: string
+                    resumen?: string | null
                     descripcion: string
                     categoria?: string | null
                     unidad?: string | null
@@ -33,6 +35,7 @@ export interface Database {
                 Update: {
                     id?: string
                     codigo?: string
+                    resumen?: string | null
                     descripcion?: string
                     categoria?: string | null
                     unidad?: string | null
@@ -185,6 +188,47 @@ export interface Database {
                     descripcion?: string | null
                     estado?: string
                     user_id?: string | null
+                    created_at?: string
+                }
+            }
+            partidas_descomposicion: {
+                Row: {
+                    id: string
+                    partida_codigo: string
+                    user_id: string
+                    componente_codigo: string
+                    componente_tipo: string
+                    componente_unidad: string
+                    componente_resumen: string
+                    componente_descripcion: string
+                    componente_precio: number
+                    rendimiento: number
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    partida_codigo: string
+                    user_id: string
+                    componente_codigo: string
+                    componente_tipo: string
+                    componente_unidad?: string
+                    componente_resumen?: string
+                    componente_descripcion?: string
+                    componente_precio: number
+                    rendimiento: number
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    partida_codigo?: string
+                    user_id?: string
+                    componente_codigo?: string
+                    componente_tipo?: string
+                    componente_unidad?: string
+                    componente_resumen?: string
+                    componente_descripcion?: string
+                    componente_precio?: number
+                    rendimiento?: number
                     created_at?: string
                 }
             }

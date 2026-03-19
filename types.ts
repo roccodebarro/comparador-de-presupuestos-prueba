@@ -10,11 +10,12 @@ export interface User {
 export interface Partida {
   id: string;
   codigo: string;
-  descripcion: string;
+  resumen?: string; // Nuevo: Resumen corto (~C)
+  descripcion: string; // Descripción larga (~T)
   categoria: string;
-  unidad?: string; // Nuevo campo opcional
+  unidad?: string;
   precioUnitario: number;
-  normalized?: string[]; // Caché de palabras normalizadas para rendimiento
+  normalized?: string[];
 }
 
 export interface ActivityLog {
@@ -28,7 +29,9 @@ export interface ActivityLog {
 
 export interface ComparisonItem {
   id: string;
-  clientePartida: string;
+  clientePartida: string; //Descripción larga
+  clienteResumen?: string; //Resumen corto
+  clienteCodigo?: string;
   cantidad: number;
   estado: 'COINCIDENTE' | 'SIMILAR' | 'SIN COINCIDENCIA';
   confianza: number;
@@ -36,4 +39,5 @@ export interface ComparisonItem {
   precioVenta: number;
   precioCoste: number;
   porcentaje: number;
+  clientePrecio?: number;
 }

@@ -60,7 +60,7 @@ const ExportHub: React.FC = () => {
       const rowTotal = Number((item.cantidad * realUnitPrice).toFixed(2));
 
       const fullDesc = item.clientePartida || "";
-      const summary = extractSummary(fullDesc);
+      const summary = item.clienteResumen || extractSummary(fullDesc);
 
       return {
         Código: item.miPartida?.codigo || "",

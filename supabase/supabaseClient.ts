@@ -5,4 +5,16 @@ import type { Database } from '../utils/database.types'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+console.log('Supabase Config Check:', {
+    url: supabaseUrl ? 'Defined' : 'MISSING',
+    key: supabaseAnonKey ? 'Defined' : 'MISSING'
+});
+
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Critical: Supabase environment variables are missing! Falling back to placeholders to prevent crash.');
+}
+
+export const supabase = createClient<Database>(
+    supabaseUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey || 'placeholder-key'
+)

@@ -4,7 +4,7 @@
  */
 
 /** Score mínimo para clasificar como COINCIDENTE (match exacto) */
-export const MATCH_THRESHOLD = 85;
+export const MATCH_THRESHOLD = 88;
 
 /** Score mínimo para clasificar como SIMILAR */
-export const SIMILAR_THRESHOLD = 60;
+export const SIMILAR_THRESHOLD = 62;

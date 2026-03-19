@@ -28,13 +28,14 @@ const App: React.FC = () => {
     // Check active session on mount
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
-        console.log('Session checked:', session ? 'Found' : 'Not found');
+        console.log('Session check successful:', session ? `User ID: ${session.user.id}` : 'No active session');
         setSession(session);
       })
       .catch(err => {
-        console.error('Error checking session:', err);
+        console.error('CRITICAL: Error checking session in App.tsx:', err);
       })
       .finally(() => {
+        console.log('App initialization finished (loading=false)');
         setLoading(false);
       });
 
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   }, []);
 
   if (loading) {
+    console.log('App is in loading state...');
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
